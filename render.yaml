@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: distribution-api
+    runtime: node
+    rootDir: server
+    plan: starter
+    buildCommand: npm install && npx prisma generate && npx prisma migrate deploy
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        sync: false
+      - key: BUSINESS_NAME
+        sync: false
+      - key: BUSINESS_STATE
+        value: Maharashtra
+      - key: INVOICE_PREFIX
+        value: INV
+
+  - type: web
+    name: distribution-web
+    runtime: static
+    rootDir: client
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_API_URL
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

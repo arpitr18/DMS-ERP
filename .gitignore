@@ -1,0 +1,14 @@
+node_modules/
+.env
+.env.*
+!.env.example
+client/dist/
+server/generated/
+*.log
+.DS_Store
+coverage/
+
+client/.env.*
+server/.env.*
+
+docs/
