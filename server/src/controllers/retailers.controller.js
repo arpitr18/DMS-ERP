@@ -5,8 +5,9 @@ import { retailerOutstanding } from '../services/outstanding.js';
 
 const schema = z.object({
   code: z.string().min(1).transform(v => v.trim().toUpperCase()), name: z.string().min(1), market: z.string().min(1),
-  gstin: z.string().optional().nullable(), phone: z.string().optional().nullable(), address: z.string().optional().nullable(),
-  state: z.string().optional().nullable(), openingOutstanding: z.coerce.number().optional().default(0),
+  gstin: z.string().optional().nullable(), phone: z.string().optional().nullable(),
+  address: z.string().trim().min(5, 'Complete shop address is required.'),
+  state: z.string().trim().min(2, 'State is required.'), openingOutstanding: z.coerce.number().optional().default(0),
   creditLimit: z.coerce.number().optional().nullable(), active: z.boolean().optional().default(true)
 });
 

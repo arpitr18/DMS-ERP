@@ -5,10 +5,11 @@ import { streamInvoicePdf } from '../services/pdf.js';
 import { getEffectivePrice } from '../services/pricing.js';
 import { generateInvoiceNumber } from '../utils/invoiceNumber.js';
 import { money } from '../utils/numbers.js';
+import { calculateInclusiveTotals } from '../services/inclusiveTax.js';
 
 const itemSchema = z.object({ productId: z.string().uuid(), quantity: z.coerce.number().positive(), manualRate: z.coerce.number().positive().optional().nullable() });
 const invoiceSchema = z.object({
-  retailerId: z.string().uuid(), invoiceDate: z.string().or(z.date()), paymentMode: z.enum(['CASH', 'CREDIT', 'PARTIAL']).default('CREDIT'),
+  billType: z.enum(['GST', 'RETAIL']).default('RETAIL'), retailerId: z.string().uuid(), invoiceDate: z.string().or(z.date()), paymentMode: z.enum(['CASH', 'CREDIT', 'PARTIAL']).default('CREDIT'),
   amountReceived: z.coerce.number().min(0).default(0), discount: z.coerce.number().min(0).default(0), roundOff: z.coerce.number().default(0),
   notes: z.string().optional().nullable(), items: z.array(itemSchema).min(1)
 });
@@ -42,6 +43,8 @@ export async function createInvoice(req, res) {
   const invoice = await prisma.$transaction(async tx => {
     const retailer = await tx.retailer.findUnique({ where: { id: data.retailerId } });
     if (!retailer || !retailer.active) throw Object.assign(new Error('Retailer not found or inactive.'), { status: 400 });
+    if (!retailer.address?.trim() || !retailer.state?.trim()) throw Object.assign(new Error('Add the retailer complete shop address and state before creating a bill.'), { status: 400 });
+    if (data.billType === 'GST' && !retailer.gstin?.trim()) throw Object.assign(new Error('Add the retailer GSTIN before creating a GST bill.'), { status: 400 });
     const business = await getBusinessSettings(tx);
     const productIds = [...new Set(data.items.map(i => i.productId))];
     const products = await tx.product.findMany({ where: { id: { in: productIds }, active: true } });
@@ -55,25 +58,17 @@ export async function createInvoice(req, res) {
       if (available < item.quantity) throw Object.assign(new Error(`${product.name}: only ${available} ${product.unit} available.`), { status: 400 });
       const effective = await getEffectivePrice(tx, retailer.id, product.id);
       const rate = item.manualRate ?? effective.rate;
-      const taxableAmount = money(item.quantity * rate);
-      const taxAmount = money(taxableAmount * Number(product.gstRate) / 100);
+      const taxableAmount = money(item.quantity * rate / (1 + Number(product.gstRate) / 100));
+      const taxAmount = money(item.quantity * rate - taxableAmount);
       itemRows.push({
         productId: product.id, productCodeSnapshot: product.code, productNameSnapshot: product.name, hsnCodeSnapshot: product.hsnCode,
         quantity: item.quantity, rate, costRate: Number(product.basePrice), mrpSnapshot: Number(product.mrp), gstRate: Number(product.gstRate),
         taxableAmount, taxAmount, lineTotal: money(taxableAmount + taxAmount)
       });
     }
-    const subtotal = money(itemRows.reduce((sum, item) => sum + item.taxableAmount, 0));
-    const discount = Math.min(data.discount, subtotal);
-    const discountRatio = subtotal ? (subtotal - discount) / subtotal : 1;
-    let taxableAmount = 0; let totalTax = 0;
-    for (const item of itemRows) {
-      item.taxableAmount = money(item.taxableAmount * discountRatio);
-      item.taxAmount = money(item.taxableAmount * item.gstRate / 100);
-      item.lineTotal = money(item.taxableAmount + item.taxAmount);
-      taxableAmount += item.taxableAmount; totalTax += item.taxAmount;
-    }
-    taxableAmount = money(taxableAmount); totalTax = money(totalTax);
+    const totals = calculateInclusiveTotals(itemRows, data.discount);
+    const { subtotal, discount, taxableAmount, totalTax } = totals;
+    itemRows.splice(0, itemRows.length, ...totals.lines);
     const sameState = String(retailer.state || '').trim().toLowerCase() === String(business.state || '').trim().toLowerCase();
     const cgst = sameState ? money(totalTax / 2) : 0;
     const sgst = sameState ? money(totalTax - cgst) : 0;
@@ -84,9 +79,9 @@ export async function createInvoice(req, res) {
     const balanceDue = money(grandTotal - amountReceived);
     const created = await tx.invoice.create({
       data: {
-        invoiceNumber: generateInvoiceNumber(business.invoicePrefix), retailerId: retailer.id, invoiceDate: new Date(data.invoiceDate),
+        billType: data.billType, invoiceNumber: generateInvoiceNumber(business.invoicePrefix), retailerId: retailer.id, invoiceDate: new Date(data.invoiceDate),
         paymentMode: data.paymentMode, status: balanceDue <= 0 ? 'PAID' : 'OPEN', retailerNameSnapshot: retailer.name,
-        retailerCodeSnapshot: retailer.code, retailerGstinSnapshot: retailer.gstin, retailerAddressSnapshot: retailer.address,
+        retailerCodeSnapshot: retailer.code, retailerGstinSnapshot: data.billType === 'GST' ? retailer.gstin : null, retailerAddressSnapshot: retailer.address,
         retailerStateSnapshot: retailer.state, businessNameSnapshot: business.businessName, businessGstinSnapshot: business.gstin || null,
         businessAddressSnapshot: business.address || null, businessPhoneSnapshot: business.phone || null, businessStateSnapshot: business.state || null,
         subtotal, discount, taxableAmount, cgst, sgst, igst, roundOff: data.roundOff, grandTotal, amountReceived, balanceDue,

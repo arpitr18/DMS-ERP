@@ -127,6 +127,7 @@ model PurchaseItem {
 }
 
 model Invoice {
+  billType                String   @default("GST")
   id                      String   @id @default(uuid())
   invoiceNumber           String   @unique
   retailerId              String

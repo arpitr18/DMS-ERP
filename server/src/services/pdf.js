@@ -1,126 +1,58 @@
-import PDFDocument from "pdfkit";
+import PDFDocument from 'pdfkit';
 
-const inr = (n) => `Rs. ${Number(n || 0).toFixed(2)}`;
+const amount = value => Number(value || 0).toFixed(2);
 
 export function streamInvoicePdf(invoice, res) {
-  const doc = new PDFDocument({ size: "A4", margin: 40 });
-  const fileName = `${invoice.invoiceNumber}.pdf`;
-  res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `inline; filename="${fileName}"`);
+  const doc = new PDFDocument({size:'A4', margin:38});
+  res.setHeader('Content-Type','application/pdf');
+  res.setHeader('Content-Disposition', 'inline; filename="'+invoice.invoiceNumber+'.pdf"');
   doc.pipe(res);
-
-  doc
-    .fontSize(18)
-    .font("Helvetica-Bold")
-    .text(invoice.businessNameSnapshot || "Distribution Management", {
-      align: "center",
-    });
-  doc
-    .moveDown(0.25)
-    .fontSize(9)
-    .font("Helvetica")
-    .text(invoice.businessAddressSnapshot || "", { align: "center" });
-  if (invoice.businessGstinSnapshot)
-    doc.text(`GSTIN: ${invoice.businessGstinSnapshot}`, { align: "center" });
-  if (invoice.businessPhoneSnapshot)
-    doc.text(`Phone: ${invoice.businessPhoneSnapshot}`, { align: "center" });
-  doc
-    .moveDown()
-    .fontSize(14)
-    .font("Helvetica-Bold")
-    .text("TAX INVOICE", { align: "center" });
-  doc.moveDown();
-
-  const y = doc.y;
-  doc
-    .fontSize(10)
-    .font("Helvetica-Bold")
-    .text(`Invoice: ${invoice.invoiceNumber}`, 40, y);
-  doc
-    .font("Helvetica")
-    .text(
-      `Date: ${new Date(invoice.invoiceDate).toLocaleDateString("en-IN")}`,
-      360,
-      y,
-      { align: "right", width: 190 },
-    );
-  doc.moveDown(1.2);
-
-  doc.font("Helvetica-Bold").text("Bill To");
-  doc.font("Helvetica").text(invoice.retailerNameSnapshot);
-  if (invoice.retailerAddressSnapshot)
-    doc.text(invoice.retailerAddressSnapshot);
-  if (invoice.retailerGstinSnapshot)
-    doc.text(`GSTIN: ${invoice.retailerGstinSnapshot}`);
-  if (invoice.retailerStateSnapshot)
-    doc.text(`State: ${invoice.retailerStateSnapshot}`);
-  doc.moveDown();
-
-  const cols = [40, 78, 260, 310, 365, 420, 485];
-  const widths = [38, 182, 50, 55, 55, 65];
-  const tableTop = doc.y;
-  doc.rect(40, tableTop - 4, 510, 22).fill("#f1f5f9");
-  doc.fillColor("#111827").font("Helvetica-Bold").fontSize(8);
-  ["Code", "Product", "Qty", "Rate", "GST%", "Amount"].forEach((h, i) =>
-    doc.text(h, cols[i], tableTop + 2, { width: widths[i] }),
-  );
-  doc.y = tableTop + 24;
-
-  doc.font("Helvetica").fontSize(8);
-  for (const item of invoice.items) {
-    if (doc.y > 720) {
-      doc.addPage();
-      doc.y = 50;
-    }
-    const rowY = doc.y;
-    doc.text(item.productCodeSnapshot, cols[0], rowY, { width: widths[0] });
-    doc.text(item.productNameSnapshot, cols[1], rowY, { width: widths[1] });
-    doc.text(Number(item.quantity).toFixed(2), cols[2], rowY, {
-      width: widths[2],
-    });
-    doc.text(inr(item.rate), cols[3], rowY, { width: widths[3] });
-    doc.text(Number(item.gstRate).toFixed(2), cols[4], rowY, {
-      width: widths[4],
-    });
-    doc.text(inr(item.lineTotal), cols[5], rowY, {
-      width: widths[5],
-      align: "right",
-    });
-    doc.moveDown(1.4);
-    doc
-      .moveTo(40, doc.y - 3)
-      .lineTo(550, doc.y - 3)
-      .strokeColor("#e5e7eb")
-      .stroke();
-  }
-
-  doc.moveDown();
-  const totalsX = 340;
-  const valueX = 460;
-  const totalLine = (label, value, bold = false) => {
-    doc
-      .font(bold ? "Helvetica-Bold" : "Helvetica")
-      .fontSize(bold ? 10 : 9)
-      .text(label, totalsX, doc.y, { width: 115 });
-    doc.text(inr(value), valueX, doc.y - (bold ? 12 : 10), {
-      width: 90,
-      align: "right",
-    });
-    doc.moveDown(0.35);
+  const gst = invoice.billType !== 'RETAIL';
+  const text=(value,x,y,width,size=9,bold=false,align='left')=>{
+    doc.fillColor('#111111').font(bold?'Helvetica-Bold':'Helvetica').fontSize(size)
+      .text(String(value||''),x,y,{width,align});
   };
-  totalLine("Taxable", invoice.taxableAmount);
-  if (Number(invoice.cgst)) totalLine("CGST", invoice.cgst);
-  if (Number(invoice.sgst)) totalLine("SGST", invoice.sgst);
-  if (Number(invoice.igst)) totalLine("IGST", invoice.igst);
-  if (Number(invoice.roundOff)) totalLine("Round off", invoice.roundOff);
-  totalLine("Grand Total", invoice.grandTotal, true);
-  totalLine("Received", invoice.amountReceived);
-  totalLine("Balance Due", invoice.balanceDue, true);
-
-  doc
-    .moveDown(1.5)
-    .fontSize(8)
-    .font("Helvetica")
-    .text("This invoice was generated electronically from saved billing data.");
+  const box=(x,y,w,h,fill=false)=>{
+    doc.lineWidth(0.5).strokeColor('#777777');
+    if(fill) doc.rect(x,y,w,h).fillAndStroke('#dddddd','#777777');
+    else doc.rect(x,y,w,h).stroke();
+  };
+  const header=()=>{
+    text(invoice.businessNameSnapshot,40,43,275,16,true);
+    text([invoice.businessAddressSnapshot,invoice.businessStateSnapshot,invoice.businessPhoneSnapshot?'Phone: '+invoice.businessPhoneSnapshot:'',invoice.businessGstinSnapshot?'GSTIN: '+invoice.businessGstinSnapshot:''].filter(Boolean).join('\n'),40,70,265);
+    text(gst?'TAX INVOICE':'RETAIL INVOICE',320,42,235,23,true,'right');
+    const rows=[['INVOICE #','DATE'],[invoice.invoiceNumber,new Date(invoice.invoiceDate).toLocaleDateString('en-IN')],['CUSTOMER ID','TERMS'],[invoice.retailerCodeSnapshot,invoice.paymentMode]];
+    rows.forEach((row,i)=>row.forEach((v,j)=>{box(325+j*115,103+i*22,115,22,i%2===0);text(v,329+j*115,110+i*22,107,8,i%2===0,'center');}));
+    for(const [x,title] of [[40,'BILL TO'],[325,'SHIP TO']]) {
+      box(x,216,230,20,true);text(title,x+5,222,220,9,true);
+      text([invoice.retailerNameSnapshot,invoice.retailerAddressSnapshot,invoice.retailerStateSnapshot,gst&&invoice.retailerGstinSnapshot?'GSTIN: '+invoice.retailerGstinSnapshot:''].filter(Boolean).join('\n'),x+3,243,224);
+    }
+  };
+  const columns=[40,340,385,470,555];
+  const tableHeader=y=>{
+    ['DESCRIPTION','QTY','UNIT PRICE','AMOUNT'].forEach((label,i)=>{box(columns[i],y,columns[i+1]-columns[i],22,true);text(label,columns[i]+4,y+7,columns[i+1]-columns[i]-8,8,true,i?'right':'left');});
+  };
+  header(); let top=345; tableHeader(top); let y=top+22;
+  const bottom=650;
+  const closeTable=()=>{columns.forEach(x=>doc.moveTo(x,top+22).lineTo(x,bottom).stroke());doc.moveTo(40,bottom).lineTo(555,bottom).stroke();};
+  for(const item of invoice.items) {
+    const description=item.productNameSnapshot+(gst?' (GST '+Number(item.gstRate)+'%)':'');
+    doc.font('Helvetica').fontSize(9);
+    const height=Math.max(24,doc.heightOfString(description,{width:290})+10);
+    if(y+height>bottom) {closeTable();text('Continued on next page',40,670,515,9,false,'right');doc.addPage();text(invoice.invoiceNumber+' - continued',40,40,515,11,true);top=70;tableHeader(top);y=top+22;}
+    text(description,45,y+6,290);
+    text(Number(item.quantity),344,y+6,37,9,false,'right');
+    text(amount(item.rate),389,y+6,77,9,false,'right');
+    text(amount(item.lineTotal),474,y+6,77,9,false,'right');
+    y+=height;
+  }
+  closeTable();
+  box(40,650,300,26);text('Thank you for your business!',45,659,290,9,false,'center');
+  box(340,650,215,26);text('TOTAL',345,659,85,10,true);text(amount(invoice.grandTotal),435,659,115,10,true,'right');
+  let ty=686;
+  const totals=[['Taxable value',invoice.taxableAmount],['GST included',Number(invoice.cgst||0)+Number(invoice.sgst||0)+Number(invoice.igst||0)],['Discount',invoice.discount],['Round off',invoice.roundOff],['Received',invoice.amountReceived],['Balance due',invoice.balanceDue]];
+  totals.forEach(([label,value])=>{text(label,340,ty,125,8);text(amount(value),470,ty,80,8,false,'right');ty+=13;});
+  text('Amounts in INR. Unit prices include GST.',40,691,290,8);
+  if(invoice.notes) text(invoice.notes,40,710,275,8);
   doc.end();
 }
