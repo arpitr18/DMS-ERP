@@ -47,6 +47,9 @@ model Product {
   hsnCode            String?
   unit               String   @default("PCS")
   unitsPerCarton     Int?
+  pieceWeightGrams   Decimal? @db.Decimal(12, 3)
+  caseWeightKg       Decimal? @db.Decimal(12, 6)
+  purchaseGstRate    Decimal? @db.Decimal(5, 2)
   minStock           Decimal  @default(0) @db.Decimal(12, 3)
   active             Boolean  @default(true)
   createdAt          DateTime @default(now())
@@ -58,11 +61,53 @@ model Product {
   inventoryTransactions InventoryTransaction[]
 }
 
+model Beat {
+  address String?
+  state String?
+  city String?
+  stateId String?
+  cityId String?
+  locationState LocationState? @relation(fields: [stateId], references: [id])
+  locationCity LocationCity? @relation(fields: [cityId], references: [id])
+  id String @id @default(uuid())
+  name String @unique
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  retailers Retailer[]
+  salesmen SalesmanBeat[]
+}
+
+model Salesman {
+  id String @id @default(uuid())
+  name String
+  phone String?
+  email String?
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  beats SalesmanBeat[]
+}
+
+model SalesmanBeat {
+  salesmanId String
+  beatId String
+  salesman Salesman @relation(fields: [salesmanId], references: [id], onDelete: Cascade)
+  beat Beat @relation(fields: [beatId], references: [id], onDelete: Restrict)
+  @@id([salesmanId, beatId])
+}
+
 model Retailer {
+  city String?
+  stateId String?
+  cityId String?
+  locationState LocationState? @relation(fields: [stateId], references: [id])
+  locationCity LocationCity? @relation(fields: [cityId], references: [id])
   id                 String   @id @default(uuid())
   code               String   @unique
   name               String
   market             String
+  beat               Beat @relation(fields: [market], references: [name], onUpdate: Cascade, onDelete: Restrict)
   gstin              String?
   phone              String?
   address            String?
@@ -246,6 +291,25 @@ model Expense {
   category ExpenseCategory @relation(fields: [categoryId], references: [id])
 
   @@index([expenseDate])
+}
+
+model LocationState {
+  id String @id
+  name String @unique
+  category String
+  cities LocationCity[]
+  retailers Retailer[]
+  beats Beat[]
+}
+
+model LocationCity {
+  id String @id
+  name String
+  stateId String
+  state LocationState @relation(fields: [stateId], references: [id])
+  retailers Retailer[]
+  beats Beat[]
+  @@unique([stateId, name])
 }
 
 model ImportLog {

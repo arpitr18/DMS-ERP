@@ -1,12 +1,16 @@
 import ExcelJS from 'exceljs';
 import { z } from 'zod';
 import { prisma } from '../db.js';
+import { normalizeProductPacking } from '../services/productPacking.js';
 
 const productSchema = z.object({
   code: z.string().min(1).transform(v => v.trim().toUpperCase()), name: z.string().min(1).transform(v => v.trim()),
   category: z.string().optional().nullable(), basePrice: z.coerce.number().nonnegative(), defaultSellingRate: z.coerce.number().nonnegative(),
   mrp: z.coerce.number().nonnegative(), gstRate: z.coerce.number().min(0).max(100), hsnCode: z.string().optional().nullable(),
   unit: z.string().optional().default('PCS'), unitsPerCarton: z.coerce.number().int().positive().optional().nullable(),
+  pieceWeightGrams: z.coerce.number().positive().multipleOf(0.001).optional().nullable(),
+  caseWeightKg: z.coerce.number().positive().multipleOf(0.000001).optional().nullable(),
+  purchaseGstRate: z.coerce.number().min(0).max(100).optional().nullable(),
   minStock: z.coerce.number().nonnegative().optional().default(0), openingQty: z.coerce.number().nonnegative().optional().default(0),
   active: z.boolean().optional().default(true)
 });
@@ -21,7 +25,7 @@ export async function listProducts(req, res) {
 }
 
 export async function createProduct(req, res) {
-  const data = productSchema.parse(req.body);
+  const data = normalizeProductPacking(productSchema.parse(req.body));
   const { openingQty, ...productData } = data;
   const product = await prisma.$transaction(async tx => {
     const created = await tx.product.create({ data: productData });
@@ -33,7 +37,12 @@ export async function createProduct(req, res) {
 
 export async function updateProduct(req, res) {
   const data = productSchema.omit({ openingQty: true }).partial().parse(req.body);
-  res.json(await prisma.product.update({ where: { id: req.params.id }, data }));
+  const existing = await prisma.product.findUnique({ where: { id: req.params.id } });
+  if (!existing) return res.status(404).json({ message: 'Product not found.' });
+  const packing = normalizeProductPacking({ ...existing, ...data });
+  res.json(await prisma.product.update({ where: { id: req.params.id }, data: {
+    ...data, unitsPerCarton: packing.unitsPerCarton
+  } }));
 }
 
 export async function importProducts(req, res) {
@@ -57,11 +66,17 @@ export async function importProducts(req, res) {
       defaultSellingRate: value(row, ['defaultsellingrate', 'default selling rate', 'sellingrate', 'selling rate']), mrp: value(row, ['mrp']),
       gstRate: value(row, ['gstrate', 'gst rate', 'gst']), hsnCode: value(row, ['hsncode', 'hsn code', 'hsn']), unit: value(row, ['unit']) || 'PCS',
       unitsPerCarton: value(row, ['unitspercarton', 'units per carton']), minStock: value(row, ['minstock', 'min stock']) || 0,
+      pieceWeightGrams: value(row, ['pieceweightgrams', 'grammage per piece (g)']),
+      caseWeightKg: value(row, ['caseweightkg', 'case weight (kg)']),
+      purchaseGstRate: value(row, ['purchasegstrate', 'purchase gst %']),
       openingQty: value(row, ['openingqty', 'opening qty', 'openingstock', 'opening stock']) || 0
     };
     const result = productSchema.safeParse(raw);
     if (!result.success) errors.push({ row: rowNo, errors: result.error.issues.map(i => i.message).join(', ') });
-    else parsed.push({ rowNo, data: result.data });
+    else {
+      try { parsed.push({ rowNo, data: normalizeProductPacking(result.data) }); }
+      catch (error) { errors.push({ row: rowNo, errors: error.message }); }
+    }
   });
   const codes = parsed.map(x => x.data.code);
   if (new Set(codes).size !== codes.length) errors.push({ row: '-', errors: 'Duplicate product codes exist inside the file.' });

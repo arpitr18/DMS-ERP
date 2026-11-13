@@ -1,3 +1,4 @@
+import DownloadTemplate from '../components/DownloadTemplate';
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Upload, RotateCcw } from "lucide-react";
@@ -58,9 +59,9 @@ export default function SellingMaster() {
     <>
       <PageHeader
         title="Selling Master"
-        description="Set custom retailer-product prices. Custom rate automatically overrides the product default during billing."
+        description="Set custom retailer-product prices"
         action={
-          <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold hover:bg-slate-50">
+          <div className="flex flex-wrap gap-2"><DownloadTemplate type="pricing"/><label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold hover:bg-slate-50">
             <Upload size={17} />
             {importing ? "Importing..." : "Import Excel"}
             <input
@@ -69,7 +70,7 @@ export default function SellingMaster() {
               accept=".xlsx,.xls"
               onChange={(e) => importFile(e.target.files?.[0])}
             />
-          </label>
+          </label></div>
         }
       />
       <Card className="p-4">

@@ -1,5 +1,20 @@
 const BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
+export async function downloadImportTemplate(type) {
+  const response = await fetch(`${BASE}/${type}/template`, {
+    headers: { Authorization: `Bearer ${getToken()}` }
+  });
+  if (!response.ok) throw new Error('Could not download template. Please check your session and try again.');
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `${type}-import-template.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export function getToken() {
   return localStorage.getItem("dm_token");
 }

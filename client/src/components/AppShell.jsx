@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   ReceiptText,
@@ -18,45 +18,41 @@ import {
   MoreHorizontal,
   History,
   UserRound,
+  ChevronDown,
 } from "lucide-react";
 import { clearSession, getUser } from "../lib/api";
 
-const nav = [
-  ["Dashboard", "/", LayoutDashboard],
-  ["Billing", "/billing", ReceiptText],
-  ["Bill History", "/bills", History],
-  ["Products", "/products", Package],
-  ["Retailers", "/retailers", Store],
-  ["Selling Master", "/selling-master", BadgeIndianRupee],
-  ["Purchases", "/purchases", ShoppingCart],
-  ["Inventory", "/inventory", Boxes],
-  ["Collections", "/collections", WalletCards],
-  ["Expenses", "/expenses", CircleDollarSign],
-  ["Profits", "/profits", ChartNoAxesCombined],
-  ["Reports", "/reports", FileBarChart],
-];
-
-const mobileMain = nav.slice(0, 3);
+const dashboard = ["Dashboard", "/", LayoutDashboard];
+const billing = [["Create Bills", "/billing", ReceiptText], ["Billing History", "/bills", History]];
+const master = [["Product", "/products", Package], ["Retailer", "/retailers", Store], ["Selling Master", "/selling-master", BadgeIndianRupee], ["Beat Master", "/beats", Store], ["Salesmen", "/salesmen", UserRound]];
+const data = [["Profits", "/profits", ChartNoAxesCombined], ["Reports", "/reports", FileBarChart]];
+const standalone = [["Purchases", "/purchases", ShoppingCart], ["Inventory", "/inventory", Boxes], ["Collections", "/collections", WalletCards], ["Expenses", "/expenses", CircleDollarSign]];
+const mobileMain = [dashboard, ...billing];
 
 function NavItems({ close }) {
-  return (
-    <nav className="space-y-1">
-      {nav.map(([label, path, Icon]) => (
-        <NavLink
-          key={path}
-          to={path}
-          end={path === "/"}
-          onClick={close}
-          className={({ isActive }) =>
-            `flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition ${isActive ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"}`
-          }
-        >
-          <Icon size={18} />
-          <span>{label}</span>
-        </NavLink>
-      ))}
-    </nav>
-  );
+  const { pathname } = useLocation();
+  const [expanded, setExpanded] = useState({});
+  useEffect(() => {
+    const group = [["Master", master], ["Billings", billing], ["Data", data]].find(([, items]) => items.some(([, path]) => path === pathname));
+    if (group) setExpanded(previous => ({ ...previous, [group[0]]: true }));
+  }, [pathname]);
+  function link([label, path, Icon]) {
+    return <NavLink key={path} to={path} end={path === "/"} onClick={close}
+      className={({ isActive }) => `flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition ${isActive ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"}`}>
+      <Icon size={18}/><span>{label}</span>
+    </NavLink>;
+  }
+  function group(label, items, Icon) {
+    const active = items.some(([, path]) => path === pathname);
+    return <div key={label}>
+      <button type="button" aria-expanded={Boolean(expanded[label])} onClick={() => setExpanded(previous => ({ ...previous, [label]: !previous[label] }))}
+        className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-sm font-semibold hover:bg-slate-100 ${active ? "text-slate-950" : "text-slate-600"}`}>
+        <Icon size={18}/><span>{label}</span><ChevronDown size={16} className={`ml-auto transition-transform ${expanded[label] ? "rotate-180" : ""}`}/>
+      </button>
+      {expanded[label] && <div className="ml-5 space-y-1 border-l border-slate-200 pl-2">{items.map(link)}</div>}
+    </div>;
+  }
+  return <nav className="space-y-1">{link(dashboard)}{group("Master", master, Package)}{group("Billings", billing, ReceiptText)}{standalone.map(link)}{group("Data", data, FileBarChart)}</nav>;
 }
 
 export default function AppShell() {

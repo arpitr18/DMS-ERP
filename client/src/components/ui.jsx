@@ -1,4 +1,6 @@
 import { X, Loader2 } from 'lucide-react';
+import { Children } from 'react';
+import SearchableDropdown from './SearchableDropdown';
 
 export function Card({ children, className = '' }) {
   return <div className={`rounded-2xl border border-slate-200 bg-white shadow-soft ${className}`}>{children}</div>;
@@ -20,6 +22,13 @@ export function Input({ label, hint, className = '', ...props }) {
 }
 
 export function Select({ label, children, className = '', ...props }) {
+  if (/beat|retailer/i.test(label || '')) {
+    const text = value => Array.isArray(value) ? value.map(text).join('') : value == null ? '' : String(value);
+    const options = Children.toArray(children).filter(child => child.type === 'option').map(child => ({
+      label: text(child.props.children), value: String(child.props.value ?? text(child.props.children)), disabled: child.props.disabled
+    }));
+    return <SearchableDropdown label={label} options={options} className={className} value={props.value} onChange={props.onChange} disabled={props.disabled}/>;
+  }
   return <label className="block space-y-1.5"><span className="text-sm font-medium text-slate-700">{label}</span><select className={`h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-slate-900 outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100 ${className}`} {...props}>{children}</select></label>;
 }
 

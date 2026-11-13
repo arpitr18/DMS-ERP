@@ -2,8 +2,11 @@ import ExcelJS from 'exceljs';
 import { z } from 'zod';
 import { prisma } from '../db.js';
 import { retailerOutstanding } from '../services/outstanding.js';
+import { validateRetailerBeat } from '../services/retailerBeat.js';
+import { resolveLocation } from '../services/location.js';
 
 const schema = z.object({
+  stateId: z.string().optional().nullable(), cityId: z.string().optional().nullable(), city: z.string().optional().nullable(),
   code: z.string().min(1).transform(v => v.trim().toUpperCase()), name: z.string().min(1), market: z.string().min(1),
   gstin: z.string().optional().nullable(), phone: z.string().optional().nullable(),
   address: z.string().trim().min(5, 'Complete shop address is required.'),
@@ -21,11 +24,23 @@ export async function listRetailers(req, res) {
 }
 
 export async function createRetailer(req, res) {
-  res.status(201).json(await prisma.retailer.create({ data: schema.parse(req.body) }));
+  const data = schema.parse(req.body);
+  res.status(201).json(await prisma.$transaction(async tx => {
+    await validateRetailerBeat(tx, data.market);
+    Object.assign(data, await resolveLocation(tx, data));
+    return tx.retailer.create({ data });
+  }));
 }
 
 export async function updateRetailer(req, res) {
-  res.json(await prisma.retailer.update({ where: { id: req.params.id }, data: schema.partial().parse(req.body) }));
+  const data = schema.partial().parse(req.body);
+  res.json(await prisma.$transaction(async tx => {
+    const existing = await tx.retailer.findUnique({ where: { id: req.params.id } });
+    if (!existing) throw Object.assign(new Error('Retailer not found.'), { status: 404 });
+    if (data.market !== undefined) await validateRetailerBeat(tx, data.market, existing.market);
+    if (data.stateId || data.cityId || data.city || (data.state !== undefined && data.state !== existing.state)) Object.assign(data, await resolveLocation(tx, data, existing));
+    return tx.retailer.update({ where: { id: req.params.id }, data });
+  }));
 }
 
 export async function getRetailerLedger(req, res) {
@@ -59,8 +74,8 @@ export async function importRetailers(req, res) {
     if (rowNo === 1) return;
     const raw = {
       code: get(row, 'code', 'retailercode', 'retailer code'), name: get(row, 'name', 'retailername', 'retailer name', 'storename', 'store name'),
-      market: get(row, 'market', 'area'), gstin: get(row, 'gstin', 'gst'), phone: get(row, 'phone', 'mobile'), address: get(row, 'address'),
-      state: get(row, 'state'), openingOutstanding: get(row, 'openingoutstanding', 'opening outstanding') || 0,
+      market: get(row, 'beat', 'market', 'area'), gstin: get(row, 'gstin', 'gst'), phone: get(row, 'phone', 'mobile'), address: get(row, 'address'),
+      state: get(row, 'state'), city: get(row, 'city'), openingOutstanding: get(row, 'openingoutstanding', 'opening outstanding') || 0,
       creditLimit: get(row, 'creditlimit', 'credit limit') || undefined
     };
     const parsed = schema.safeParse(raw);
@@ -71,7 +86,12 @@ export async function importRetailers(req, res) {
   if (new Set(codes).size !== codes.length) errors.push({ row: '-', error: 'Duplicate retailer codes exist inside the file.' });
   if (errors.length) return res.status(400).json({ message: 'Import validation failed. Nothing was imported.', errors });
   await prisma.$transaction(async tx => {
-    for (const row of rows) await tx.retailer.upsert({ where: { code: row.data.code }, update: row.data, create: row.data });
+    for (const row of rows) {
+      const existing = await tx.retailer.findUnique({ where: { code: row.data.code } });
+      await validateRetailerBeat(tx, row.data.market, existing?.market);
+      Object.assign(row.data, await resolveLocation(tx, row.data, existing));
+      await tx.retailer.upsert({ where: { code: row.data.code }, update: row.data, create: row.data });
+    }
     await tx.importLog.create({ data: { type: 'RETAILER_MASTER', fileName: req.file.originalname, rowsReceived: rows.length, rowsImported: rows.length, status: 'SUCCESS' } });
   });
   res.json({ message: `${rows.length} retailers imported successfully.`, rowsImported: rows.length });

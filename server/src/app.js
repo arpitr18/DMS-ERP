@@ -16,6 +16,8 @@ import dashboardRoutes from "./routes/dashboard.js";
 import reportsRoutes from "./routes/reports.js";
 import settingsRoutes from "./routes/settings.js";
 import profileRoutes from "./routes/profile.js";
+import mastersRoutes from "./routes/masters.js";
+import locationsRoutes from './routes/locations.js';
 import { requireAuth } from "./middleware/auth.js";
 import { authorize } from "./middleware/authorize.js";
 import { distributorRoles } from "./constants/userRoles.js";
@@ -67,6 +69,8 @@ app.get("/api/health", async (req, res, next) => {
 
 app.use("/api/auth", authRoutes);
 const distributorOnly = authorize(...distributorRoles);
+app.use('/api/masters', requireAuth, distributorOnly, mastersRoutes);
+app.use('/api/locations', requireAuth, distributorOnly, locationsRoutes);
 app.use("/api/dashboard", requireAuth, distributorOnly, dashboardRoutes);
 app.use("/api/products", requireAuth, distributorOnly, productsRoutes);
 app.use("/api/retailers", requireAuth, distributorOnly, retailersRoutes);

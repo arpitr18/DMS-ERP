@@ -16,13 +16,21 @@ const invoiceSchema = z.object({
 
 export async function listInvoices(req, res) {
   const where = {};
+  const q = String(req.query.q || '').trim();
+  if (q) where.OR = [
+    { invoiceNumber: { contains: q, mode: 'insensitive' } },
+    { retailerNameSnapshot: { contains: q, mode: 'insensitive' } },
+    { retailer: { name: { contains: q, mode: 'insensitive' } } }
+  ];
+  if (req.query.market) where.retailer = { market: String(req.query.market) };
+  const page = z.coerce.number().int().min(1).parse(req.query.page || 1);
   if (req.query.retailerId) where.retailerId = String(req.query.retailerId);
   if (req.query.from || req.query.to) {
     where.invoiceDate = {};
     if (req.query.from) where.invoiceDate.gte = new Date(`${req.query.from}T00:00:00`);
     if (req.query.to) where.invoiceDate.lte = new Date(`${req.query.to}T23:59:59.999`);
   }
-  const rows = await prisma.invoice.findMany({ where, include: { retailer: { select: { name: true, market: true } } }, orderBy: { invoiceDate: 'desc' }, take: 300 });
+  const rows = await prisma.invoice.findMany({ where, include: { retailer: { select: { name: true, market: true } } }, orderBy: [{ invoiceDate: 'desc' }, { id: 'desc' }], take: 300, skip: (page - 1) * 300 });
   res.json(rows);
 }
 
@@ -81,7 +89,7 @@ export async function createInvoice(req, res) {
       data: {
         billType: data.billType, invoiceNumber: generateInvoiceNumber(business.invoicePrefix), retailerId: retailer.id, invoiceDate: new Date(data.invoiceDate),
         paymentMode: data.paymentMode, status: balanceDue <= 0 ? 'PAID' : 'OPEN', retailerNameSnapshot: retailer.name,
-        retailerCodeSnapshot: retailer.code, retailerGstinSnapshot: data.billType === 'GST' ? retailer.gstin : null, retailerAddressSnapshot: retailer.address,
+        retailerCodeSnapshot: retailer.code, retailerGstinSnapshot: data.billType === 'GST' ? retailer.gstin : null, retailerAddressSnapshot: [retailer.address, retailer.city].filter(Boolean).join(', '),
         retailerStateSnapshot: retailer.state, businessNameSnapshot: business.businessName, businessGstinSnapshot: business.gstin || null,
         businessAddressSnapshot: business.address || null, businessPhoneSnapshot: business.phone || null, businessStateSnapshot: business.state || null,
         subtotal, discount, taxableAmount, cgst, sgst, igst, roundOff: data.roundOff, grandTotal, amountReceived, balanceDue,

@@ -1,0 +1,12 @@
+import { Router } from 'express';
+import { listBeats, saveBeat, deleteBeat, setBeatStatus, listSalesmen, saveSalesman } from '../controllers/masters.controller.js';
+const router = Router();
+router.get('/beats', listBeats);
+router.post('/beats', saveBeat);
+router.put('/beats/:id', saveBeat);
+router.delete('/beats/:id', deleteBeat);
+router.patch('/beats/:id/status', setBeatStatus);
+router.get('/salesmen', listSalesmen);
+router.post('/salesmen', saveSalesman);
+router.put('/salesmen/:id', saveSalesman);
+export default router;

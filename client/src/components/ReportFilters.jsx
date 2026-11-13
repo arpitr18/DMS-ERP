@@ -20,7 +20,7 @@ export default function ReportFilters({filters,setFilters}) {
   return <Card className="mb-5 grid gap-4 p-4 sm:grid-cols-3">
     <Select label="Period" value={filters.period} onChange={e=>set('period',e.target.value)}><option value="range">Date range</option><option value="day">Day wise</option><option value="month">Monthly</option><option value="year">Yearly</option></Select>
     {filters.period==='range'?<><Input label="From" type="date" value={filters.from} onChange={e=>set('from',e.target.value)}/><Input label="To" type="date" value={filters.to} onChange={e=>set('to',e.target.value)}/></>:<Input label={filters.period} type={filters.period==='day'?'date':filters.period==='month'?'month':'number'} value={filters[filters.period]} onChange={e=>set(filters.period,e.target.value)}/>}
-    <Select label="Market / area" value={filters.market} onChange={e=>setFilters({...filters,market:e.target.value,retailerId:''})}><option value="">All markets</option>{markets.map(m=><option key={m}>{m}</option>)}</Select>
+    <Select label="Beat" value={filters.market} onChange={e=>setFilters({...filters,market:e.target.value,retailerId:''})}><option value="">All beats</option>{markets.map(m=><option key={m}>{m}</option>)}</Select>
     <Select label="Outlet / retailer" value={filters.retailerId} onChange={e=>set('retailerId',e.target.value)}><option value="">All outlets</option>{retailers.filter(r=>!filters.market||r.market===filters.market).map(r=><option key={r.id} value={r.id}>{r.name} ({r.code})</option>)}</Select>
   </Card>;
 }

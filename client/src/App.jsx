@@ -15,6 +15,8 @@ import Expenses from "./pages/Expenses";
 import Profits from "./pages/Profits";
 import Reports from "./pages/Reports";
 import Profile from "./pages/Profile";
+import BeatMaster from './pages/BeatMaster';
+import Salesmen from './pages/Salesmen';
 
 function Protected() {
   return getToken() ? <AppShell /> : <Navigate to="/login" replace />;
@@ -32,6 +34,8 @@ export default function App() {
         <Route path="billing" element={<Billing />} />
         <Route path="bills" element={<Bills />} />
         <Route path="products" element={<Products />} />
+        <Route path="beats" element={<BeatMaster />} />
+        <Route path="salesmen" element={<Salesmen />} />
         <Route path="retailers" element={<Retailers />} />
         <Route path="selling-master" element={<SellingMaster />} />
         <Route path="purchases" element={<Purchases />} />

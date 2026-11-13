@@ -12,3 +12,4 @@ client/.env.*
 server/.env.*
 
 docs/
+prompt.txt
