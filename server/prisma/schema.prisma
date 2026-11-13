@@ -76,17 +76,21 @@ model Beat {
   updatedAt DateTime @updatedAt
   retailers Retailer[]
   salesmen SalesmanBeat[]
+  visits SalesmanVisit[]
 }
 
 model Salesman {
+  category String?
+  visitDays String[] @default([])
   id String @id @default(uuid())
   name String
-  phone String?
-  email String?
+  phone String? @unique
+  email String? @unique
   active Boolean @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   beats SalesmanBeat[]
+  schedule SalesmanVisit[]
 }
 
 model SalesmanBeat {
@@ -97,7 +101,24 @@ model SalesmanBeat {
   @@id([salesmanId, beatId])
 }
 
+model SalesmanVisit {
+  salesmanId String
+  day String
+  beatId String
+  salesman Salesman @relation(fields: [salesmanId], references: [id], onDelete: Cascade)
+  beat Beat @relation(fields: [beatId], references: [id], onDelete: Restrict)
+  @@id([salesmanId, day])
+  @@index([beatId])
+}
+
 model Retailer {
+  ownerName String?
+  building String?
+  street String?
+  landmark String?
+  pincode String?
+  latitude Decimal? @db.Decimal(10,7)
+  longitude Decimal? @db.Decimal(10,7)
   city String?
   stateId String?
   cityId String?
@@ -172,6 +193,9 @@ model PurchaseItem {
 }
 
 model Invoice {
+  deliveryPlanId String?
+  deliveryPlan DeliveryPlan? @relation(fields: [deliveryPlanId], references: [id])
+  @@index([deliveryPlanId])
   billType                String   @default("GST")
   id                      String   @id @default(uuid())
   invoiceNumber           String   @unique
@@ -310,6 +334,31 @@ model LocationCity {
   retailers Retailer[]
   beats Beat[]
   @@unique([stateId, name])
+}
+
+model Vehicle {
+  name String?
+  id String @id @default(uuid())
+  number String @unique
+  driverName String
+  phone String?
+  capacityKg Decimal? @db.Decimal(12,3)
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  plans DeliveryPlan[]
+}
+
+model DeliveryPlan {
+  id String @id @default(uuid())
+  vehicleId String
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id])
+  scheduledDate DateTime
+  status String @default("PLANNED")
+  notes String?
+  snapshot Json
+  createdAt DateTime @default(now())
+  completedAt DateTime?
+  invoices Invoice[]
 }
 
 model ImportLog {

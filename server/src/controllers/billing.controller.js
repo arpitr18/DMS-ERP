@@ -30,7 +30,7 @@ export async function listInvoices(req, res) {
     if (req.query.from) where.invoiceDate.gte = new Date(`${req.query.from}T00:00:00`);
     if (req.query.to) where.invoiceDate.lte = new Date(`${req.query.to}T23:59:59.999`);
   }
-  const rows = await prisma.invoice.findMany({ where, include: { retailer: { select: { name: true, market: true } } }, orderBy: [{ invoiceDate: 'desc' }, { id: 'desc' }], take: 300, skip: (page - 1) * 300 });
+  const rows = await prisma.invoice.findMany({ where, include: { retailer: { select: { name: true, market: true } }, deliveryPlan: { select: { id: true, status: true, scheduledDate: true } } }, orderBy: [{ invoiceDate: 'desc' }, { id: 'desc' }], take: 300, skip: (page - 1) * 300 });
   res.json(rows);
 }
 

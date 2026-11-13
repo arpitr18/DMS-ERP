@@ -17,7 +17,7 @@ export default function ReportFilters({filters,setFilters}) {
   const {data:retailers=[]}=useQuery({queryKey:['retailers'],queryFn:()=>api('/retailers')});
   const set=(key,value)=>setFilters({...filters,[key]:value});
   const markets=[...new Set(retailers.map(r=>r.market).filter(Boolean))].sort();
-  return <Card className="mb-5 grid gap-4 p-4 sm:grid-cols-3">
+  return <Card className="mb-5 grid grid-cols-1 items-start gap-3 p-4 sm:grid-cols-[repeat(auto-fit,minmax(150px,1fr))] [&>label]:min-w-0">
     <Select label="Period" value={filters.period} onChange={e=>set('period',e.target.value)}><option value="range">Date range</option><option value="day">Day wise</option><option value="month">Monthly</option><option value="year">Yearly</option></Select>
     {filters.period==='range'?<><Input label="From" type="date" value={filters.from} onChange={e=>set('from',e.target.value)}/><Input label="To" type="date" value={filters.to} onChange={e=>set('to',e.target.value)}/></>:<Input label={filters.period} type={filters.period==='day'?'date':filters.period==='month'?'month':'number'} value={filters[filters.period]} onChange={e=>set(filters.period,e.target.value)}/>}
     <Select label="Beat" value={filters.market} onChange={e=>setFilters({...filters,market:e.target.value,retailerId:''})}><option value="">All beats</option>{markets.map(m=><option key={m}>{m}</option>)}</Select>

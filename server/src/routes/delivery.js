@@ -1,0 +1,13 @@
+import {Router} from 'express';
+import {listVehicles,saveVehicle,availableBills,listPlans,getPlan,createPlan,changePlan,summaryPdf} from '../controllers/delivery.controller.js';
+const router=Router();
+router.get('/vehicles',listVehicles);
+router.post('/vehicles',saveVehicle);
+router.put('/vehicles/:id',saveVehicle);
+router.get('/available-bills',availableBills);
+router.get('/plans',listPlans);
+router.post('/plans',createPlan);
+router.get('/plans/:id',getPlan);
+router.patch('/plans/:id',changePlan);
+router.get('/plans/:id/pdf/:kind',summaryPdf);
+export default router;

@@ -17,6 +17,9 @@ import Reports from "./pages/Reports";
 import Profile from "./pages/Profile";
 import BeatMaster from './pages/BeatMaster';
 import Salesmen from './pages/Salesmen';
+import Vehicles from './pages/Vehicles';
+import CreateDelivery from './pages/CreateDelivery';
+import DeliveryHistory from './pages/DeliveryHistory';
 
 function Protected() {
   return getToken() ? <AppShell /> : <Navigate to="/login" replace />;
@@ -36,6 +39,10 @@ export default function App() {
         <Route path="products" element={<Products />} />
         <Route path="beats" element={<BeatMaster />} />
         <Route path="salesmen" element={<Salesmen />} />
+        <Route path="delivery/create" element={<CreateDelivery />} />
+        <Route path="delivery/vehicles" element={<Vehicles />} />
+        <Route path="delivery/history" element={<DeliveryHistory />} />
+        <Route path="delivery/plans/:id" element={<DeliveryHistory />} />
         <Route path="retailers" element={<Retailers />} />
         <Route path="selling-master" element={<SellingMaster />} />
         <Route path="purchases" element={<Purchases />} />

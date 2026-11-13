@@ -1,16 +1,28 @@
+import { salesmanSchema } from '../validations/salesman.js';
+import { normalizeEmail, normalizePhone } from '../../../shared/salesmanRules.js';
 import { z } from 'zod';
 import { prisma } from '../db.js';
-import { resolveLocation } from '../services/location.js';
 
-const beatSchema = z.object({ name: z.string().trim().min(1).max(120), active: z.boolean().default(true), address: z.string().trim().optional().nullable(), stateId: z.string().optional().nullable(), cityId: z.string().optional().nullable() });
-const salesmanSchema = z.object({
-  name: z.string().trim().min(1).max(120), phone: z.string().trim().max(30).nullable().optional(),
-  email: z.union([z.string().trim().email(), z.literal('')]).nullable().optional(),
-  active: z.boolean().default(true), beatIds: z.array(z.string().min(1)).default([])
-});
+const beatSchema = z.object({ name: z.string().trim().min(1).max(120), active: z.boolean().default(true) });
 
 export async function listBeats(req, res) {
-  res.json(await prisma.beat.findMany({ orderBy: { name: 'asc' }, include: { _count: { select: { retailers: true, salesmen: true } } } }));
+  res.json(await prisma.beat.findMany({ orderBy: { name: 'asc' }, include: {
+    salesmen: { include: { salesman: { include: { schedule: true } } } },
+    _count: { select: { retailers: true, salesmen: true } }
+  } }));
+}
+
+export async function saveBeat(req, res) {
+  const data = beatSchema.parse(req.body);
+  const duplicate = await prisma.beat.findFirst({ where: { name: { equals: data.name, mode: 'insensitive' }, ...(req.params.id ? { id: { not: req.params.id } } : {}) } });
+  if (duplicate) return res.status(409).json({ message: 'A beat with this name already exists.' });
+  try {
+    const saved = req.params.id ? await prisma.beat.update({ where: { id: req.params.id }, data }) : await prisma.beat.create({ data });
+    res.status(req.params.id ? 200 : 201).json(saved);
+  } catch (error) {
+    if (error.code === 'P2025') return res.status(404).json({ message: 'Beat not found.' });
+    throw error;
+  }
 }
 
 export async function deleteBeat(req, res) {
@@ -18,7 +30,7 @@ export async function deleteBeat(req, res) {
     await prisma.beat.delete({ where: { id: req.params.id } });
     res.status(204).end();
   } catch (error) {
-    if (error.code === 'P2003') return res.status(409).json({ message: 'This beat is assigned to retailers or salesmen. Remove those assignments or deactivate the beat instead.' });
+    if (error.code === 'P2003') return res.status(409).json({ message: 'Assigned beats cannot be deleted. Deactivate this beat instead.' });
     if (error.code === 'P2025') return res.status(404).json({ message: 'Beat not found.' });
     throw error;
   }
@@ -26,38 +38,53 @@ export async function deleteBeat(req, res) {
 
 export async function setBeatStatus(req, res) {
   const data = z.object({ active: z.boolean() }).parse(req.body);
-  try {
-    res.json(await prisma.beat.update({ where: { id: req.params.id }, data }));
-  } catch (error) {
+  try { res.json(await prisma.beat.update({ where: { id: req.params.id }, data })); }
+  catch (error) {
     if (error.code === 'P2025') return res.status(404).json({ message: 'Beat not found.' });
     throw error;
   }
 }
-export async function saveBeat(req, res) {
-  const data = beatSchema.parse(req.body);
-  Object.assign(data, await resolveLocation(prisma, data));
-  const duplicate = await prisma.beat.findFirst({ where: { name: { equals: data.name, mode: 'insensitive' }, ...(req.params.id ? { id: { not: req.params.id } } : {}) } });
-  if (duplicate) return res.status(409).json({ message: 'A beat with this name already exists.' });
-  res.status(req.params.id ? 200 : 201).json(await (req.params.id
-    ? prisma.beat.update({ where: { id: req.params.id }, data }) : prisma.beat.create({ data })));
-}
+
 export async function listSalesmen(req, res) {
-  res.json(await prisma.salesman.findMany({ include: { beats: { include: { beat: true } } }, orderBy: { name: 'asc' } }));
+  res.json(await prisma.salesman.findMany({ include: { beats: { include: { beat: true } }, schedule: { include: { beat: true } } }, orderBy: { name: 'asc' } }));
 }
+
+export async function deleteSalesman(req, res) {
+  try {
+    await prisma.salesman.delete({ where: { id: req.params.id } });
+    res.status(204).end();
+  } catch (error) {
+    if (error.code === 'P2025') return res.status(404).json({ message: 'Salesman not found.' });
+    throw error;
+  }
+}
+
 export async function saveSalesman(req, res) {
-  const { beatIds, ...data } = salesmanSchema.parse(req.body);
-  const ids = [...new Set(beatIds)];
-  const saved = await prisma.$transaction(async tx => {
-    const existing = req.params.id ? await tx.salesman.findUnique({ where: { id: req.params.id }, include: { beats: true } }) : null;
-    if (req.params.id && !existing) throw Object.assign(new Error('Salesman not found.'), { status: 404 });
-    const beats = await tx.beat.findMany({ where: { id: { in: ids } } });
-    if (beats.length !== ids.length || beats.some(b => !b.active && !existing?.beats.some(link => link.beatId === b.id))) {
-      throw Object.assign(new Error('Select active beats from Beat Master.'), { status: 400 });
-    }
-    const links = { create: ids.map(beatId => ({ beatId })) };
-    return req.params.id
-      ? tx.salesman.update({ where: { id: req.params.id }, data: { ...data, beats: { deleteMany: {}, ...links } } })
-      : tx.salesman.create({ data: { ...data, beats: links } });
-  });
-  res.status(req.params.id ? 200 : 201).json(saved);
+  const { schedule, ...data } = salesmanSchema.parse(req.body);
+  const ids = [...new Set(schedule.map(entry => entry.beatId))];
+  try {
+    const saved = await prisma.$transaction(async tx => {
+      // Serialize contact checks until the pending database uniqueness migration is applied.
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(78314291)::text AS locked`;
+      const contacts = await tx.salesman.findMany({ select: { id: true, phone: true, email: true } });
+      const conflict = contacts.find(s => s.id !== req.params.id && (normalizePhone(s.phone) === data.phone || normalizeEmail(s.email) === data.email));
+      if (conflict) throw Object.assign(new Error('Phone number or email is already assigned to another salesman.'), { status: 409 });
+      const existing = req.params.id ? await tx.salesman.findUnique({ where: { id: req.params.id }, include: { schedule: true } }) : null;
+      if (req.params.id && !existing) throw Object.assign(new Error('Salesman not found.'), { status: 404 });
+      const beats = await tx.beat.findMany({ where: { id: { in: ids } } });
+      if (beats.length !== ids.length || schedule.some(entry => {
+        const beat = beats.find(b => b.id === entry.beatId);
+        return !beat?.active && !existing?.schedule.some(old => old.day === entry.day && old.beatId === entry.beatId);
+      })) throw Object.assign(new Error('Select active beats for new daily assignments.'), { status: 400 });
+      const links = ids.map(beatId => ({ beatId }));
+      const legacyDays = schedule.map(entry => entry.day);
+      return req.params.id
+        ? tx.salesman.update({ where: { id: req.params.id }, data: { ...data, visitDays: legacyDays, beats: { deleteMany: {}, create: links }, schedule: { deleteMany: {}, create: schedule } } })
+        : tx.salesman.create({ data: { ...data, visitDays: legacyDays, beats: { create: links }, schedule: { create: schedule } } });
+    }, { timeout: 15000 });
+    res.status(req.params.id ? 200 : 201).json(saved);
+  } catch (error) {
+    if (error.code === 'P2002') return res.status(409).json({ message: 'Phone number or email is already assigned to another salesman.' });
+    throw error;
+  }
 }

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { listBeats, saveBeat, deleteBeat, setBeatStatus, listSalesmen, saveSalesman } from '../controllers/masters.controller.js';
+import { listBeats, saveBeat, deleteBeat, setBeatStatus, listSalesmen, saveSalesman, deleteSalesman } from '../controllers/masters.controller.js';
 const router = Router();
 router.get('/beats', listBeats);
 router.post('/beats', saveBeat);
@@ -9,4 +9,5 @@ router.patch('/beats/:id/status', setBeatStatus);
 router.get('/salesmen', listSalesmen);
 router.post('/salesmen', saveSalesman);
 router.put('/salesmen/:id', saveSalesman);
+router.delete('/salesmen/:id', deleteSalesman);
 export default router;

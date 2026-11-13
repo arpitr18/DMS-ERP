@@ -2,9 +2,10 @@ import { Router } from 'express';
 import multer from 'multer';
 import { createProduct, importProducts, listProducts, updateProduct } from '../controllers/products.controller.js';
 
-import { downloadTemplate } from '../controllers/templates.controller.js';
+import { downloadTemplate, downloadProductMaster } from '../controllers/templates.controller.js';
 const router = Router();
 router.get('/template', downloadTemplate('products'));
+router.get('/export', downloadProductMaster);
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 router.get('/', listProducts);
 router.post('/', createProduct);

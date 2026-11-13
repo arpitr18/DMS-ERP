@@ -1,14 +1,20 @@
 const BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
-export async function downloadImportTemplate(type) {
-  const response = await fetch(`${BASE}/${type}/template`, {
+export async function downloadDeliveryPdf(id,kind) {
+  const response=await fetch(`${BASE}/delivery/plans/${id}/pdf/${kind}`,{headers:{Authorization:`Bearer ${getToken()}`}});
+  if(!response.ok){let data={};try{data=await response.json()}catch{}throw new Error(data.message||'Could not generate delivery PDF.')}
+  const url=URL.createObjectURL(await response.blob());const link=document.createElement('a');link.href=url;link.download=`delivery-${kind}-${id.slice(0,8)}.pdf`;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+export async function downloadImportTemplate(type, master = false) {
+  const response = await fetch(`${BASE}/${type}/${master ? 'export' : 'template'}`, {
     headers: { Authorization: `Bearer ${getToken()}` }
   });
-  if (!response.ok) throw new Error('Could not download template. Please check your session and try again.');
+  if (!response.ok) throw new Error('Could not download file. Please check your session and try again.');
   const url = URL.createObjectURL(await response.blob());
   const link = document.createElement('a');
   link.href = url;
-  link.download = `${type}-import-template.xlsx`;
+  link.download = master ? 'product-master.xlsx' : `${type}-import-template.xlsx`;
   document.body.appendChild(link);
   link.click();
   link.remove();

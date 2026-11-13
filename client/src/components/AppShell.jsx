@@ -19,6 +19,7 @@ import {
   History,
   UserRound,
   ChevronDown,
+  Truck,
 } from "lucide-react";
 import { clearSession, getUser } from "../lib/api";
 
@@ -26,6 +27,7 @@ const dashboard = ["Dashboard", "/", LayoutDashboard];
 const billing = [["Create Bills", "/billing", ReceiptText], ["Billing History", "/bills", History]];
 const master = [["Product", "/products", Package], ["Retailer", "/retailers", Store], ["Selling Master", "/selling-master", BadgeIndianRupee], ["Beat Master", "/beats", Store], ["Salesmen", "/salesmen", UserRound]];
 const data = [["Profits", "/profits", ChartNoAxesCombined], ["Reports", "/reports", FileBarChart]];
+const delivery = [["Create Plan", "/delivery/create", ReceiptText], ["Vehicle Details", "/delivery/vehicles", Truck], ["Delivery History", "/delivery/history", History]];
 const standalone = [["Purchases", "/purchases", ShoppingCart], ["Inventory", "/inventory", Boxes], ["Collections", "/collections", WalletCards], ["Expenses", "/expenses", CircleDollarSign]];
 const mobileMain = [dashboard, ...billing];
 
@@ -33,7 +35,7 @@ function NavItems({ close }) {
   const { pathname } = useLocation();
   const [expanded, setExpanded] = useState({});
   useEffect(() => {
-    const group = [["Master", master], ["Billings", billing], ["Data", data]].find(([, items]) => items.some(([, path]) => path === pathname));
+    const group = [["Master", master], ["Billings", billing], ["Data", data], ["Delivery", delivery]].find(([, items]) => items.some(([, path]) => path === pathname || (path === '/delivery/history' && pathname.startsWith('/delivery/plans/'))));
     if (group) setExpanded(previous => ({ ...previous, [group[0]]: true }));
   }, [pathname]);
   function link([label, path, Icon]) {
@@ -43,7 +45,7 @@ function NavItems({ close }) {
     </NavLink>;
   }
   function group(label, items, Icon) {
-    const active = items.some(([, path]) => path === pathname);
+    const active = items.some(([, path]) => path === pathname || (path === '/delivery/history' && pathname.startsWith('/delivery/plans/')));
     return <div key={label}>
       <button type="button" aria-expanded={Boolean(expanded[label])} onClick={() => setExpanded(previous => ({ ...previous, [label]: !previous[label] }))}
         className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-sm font-semibold hover:bg-slate-100 ${active ? "text-slate-950" : "text-slate-600"}`}>
@@ -52,7 +54,7 @@ function NavItems({ close }) {
       {expanded[label] && <div className="ml-5 space-y-1 border-l border-slate-200 pl-2">{items.map(link)}</div>}
     </div>;
   }
-  return <nav className="space-y-1">{link(dashboard)}{group("Master", master, Package)}{group("Billings", billing, ReceiptText)}{standalone.map(link)}{group("Data", data, FileBarChart)}</nav>;
+  return <nav className="space-y-1">{link(dashboard)}{group("Master", master, Package)}{group("Billings", billing, ReceiptText)}{group("Delivery", delivery, Truck)}{standalone.map(link)}{group("Data", data, FileBarChart)}</nav>;
 }
 
 export default function AppShell() {
