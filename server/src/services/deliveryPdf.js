@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit';
+import { sortDeliveryBills, deliveryProductTotals } from '../../../shared/deliveryDisplay.js';
 
 export async function deliveryPdf(plan,kind) {
   const snapshot=plan.snapshot;
@@ -6,10 +7,10 @@ export async function deliveryPdf(plan,kind) {
   const chunks=[];
   const done=new Promise((resolve,reject)=>{doc.on('data',chunk=>chunks.push(chunk));doc.on('end',()=>resolve(Buffer.concat(chunks)));doc.on('error',reject);});
   // Prepare every row before writing so the party summary can remain one readable page.
-  const columns=kind==='party'?[220,200,100]:[195,65,65,85,110];
-  const headers=kind==='party'?['Party','Invoice number','Bill value (INR)']:['Product','Qty / unit','Pieces','Weight (kg)','Value (INR)'];
+  const columns=kind==='party'?[160,160,110,90]:[195,65,65,85,110];
+  const headers=kind==='party'?['Party','Invoice number','Beat','Bill value (INR)']:['Product','Qty / unit','Pieces','Weight (kg)','Value (INR)'];
   const money=value=>Number(value).toFixed(2);
-  const rows=kind==='party'?snapshot.bills.map(b=>[b.party,b.invoiceNumber,money(b.total)]):snapshot.products.map(p=>[`${p.name} (${p.code})`,`${p.quantity} ${p.unit}`,p.pieces==null?'Unknown':String(p.pieces),p.weightKg==null?'Unknown':Number(p.weightKg).toFixed(3),money(p.value)]);
+  const rows=kind==='party'?sortDeliveryBills(snapshot.bills).map(b=>[b.party,b.invoiceNumber,b.beat||'—',money(b.total)]):snapshot.products.map(p=>[`${p.name} (${p.code})`,`${p.quantity} ${p.unit}`,p.pieces==null?'Unknown':String(p.pieces),p.weightKg==null?'Unknown':Number(p.weightKg).toFixed(3),money(p.value)]);
   doc.font('Helvetica').fontSize(9);
   const heights=rows.map(row=>Math.max(24,...row.map((text,i)=>doc.heightOfString(text,{width:columns[i]-10})+12)));
   if(kind==='party'&&heights.reduce((a,b)=>a+b,0)>565){doc.end();await done;throw Object.assign(new Error('Party summary exceeds one readable page. Split this delivery into smaller plans.'),{status:400});}
@@ -17,6 +18,11 @@ export async function deliveryPdf(plan,kind) {
   function row(cells,height,bold=false){const y=doc.y;let x=36;doc.font(bold?'Helvetica-Bold':'Helvetica').fontSize(9);cells.forEach((cell,i)=>{doc.text(cell,x+4,y+5,{width:columns[i]-10});x+=columns[i];});doc.strokeColor('#cbd5e1').moveTo(36,y+height).lineTo(556,y+height).stroke();doc.x=36;doc.y=y+height;}
   heading();row(headers,26,true);
   rows.forEach((cells,i)=>{if(doc.y+heights[i]>740){doc.addPage();heading();row(headers,26,true);}row(cells,heights[i]);});
+  if(kind==='product') {
+    const totals=deliveryProductTotals(snapshot.products);
+    if(doc.y+30>740){doc.addPage();heading();row(headers,26,true);}
+    row(['Grand total',`${totals.items} items`,totals.pieces==null?'Unknown':String(Number(totals.pieces.toFixed(3))),totals.weightKg==null?'Unknown':totals.weightKg.toFixed(3),money(totals.value)],28,true);
+  }
   doc.moveDown().font('Helvetica-Bold').text(`Total bill value (INR) ${money(snapshot.total)}`);
   if(kind==='product'){doc.font('Helvetica').fontSize(8).text('Quantities and packing weights are snapshotted when the plan is created. Unknown weights require product packing setup.').text(`Product line value (INR) ${money(snapshot.products.reduce((sum,p)=>sum+p.value,0))}. Bill rounding/adjustments may differ from product line totals.`);}
   doc.end();return done;

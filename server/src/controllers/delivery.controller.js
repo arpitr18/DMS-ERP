@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { prisma } from '../db.js';
 import { deliverySnapshot } from '../services/deliverySummary.js';
 import { deliveryPdf } from '../services/deliveryPdf.js';
+import { reviseDeliverySnapshot } from '../services/deliveryRevision.js';
 
 const vehicleSchema = z.object({ name: z.string().trim().min(1).max(120), number: z.string().trim().min(3).transform(v => v.replace(/\s/g,'').toUpperCase()), driverName: z.string().trim().min(1), phone: z.string().optional().nullable(), capacityKg: z.number().positive().optional().nullable(), active: z.boolean().default(true) });
 export async function listVehicles(req,res) { res.json(await prisma.vehicle.findMany({orderBy:{number:'asc'}})); }
@@ -51,6 +52,44 @@ export async function summaryPdf(req,res) {
   const kind=z.enum(['party','product']).parse(req.params.kind);
   const plan=await prisma.deliveryPlan.findUnique({where:{id:req.params.id}});
   if(!plan)return res.status(404).json({message:'Delivery plan not found.'});
+  if(plan.status!=='PLANNED')return res.status(409).json({message:'Printing is available only for pending delivery plans. Cancelled and delivered plans cannot be printed.'});
   const buffer=await deliveryPdf(plan,kind);
   res.type('application/pdf').attachment(`delivery-${kind}-${plan.id.slice(0,8)}.pdf`).send(buffer);
+}
+
+export async function modifyPlan(req, res) {
+  const data = z.object({ removeBeats: z.array(z.string()).default([]), removeRetailerIds: z.array(z.string().uuid()).default([]) }).parse(req.body);
+  const replacement = await prisma.$transaction(async tx => {
+    // Claim the state transition first. Competing modify/complete/cancel requests cannot all win.
+    const claimed = await tx.deliveryPlan.updateMany({ where: { id: req.params.id, status: 'PLANNED' }, data: { status: 'CANCELLED', completedAt: new Date() } });
+    if (claimed.count !== 1) throw Object.assign(new Error('Only pending delivery plans can be modified. Refresh the delivery details.'), { status: 409 });
+    const old = await tx.deliveryPlan.findUnique({ where: { id: req.params.id } });
+    const original = old.snapshot;
+    const knownBeats = new Set(original.bills.map(bill => bill.beat));
+    const knownRetailers = new Set(original.bills.map(bill => bill.retailerId));
+    if (data.removeBeats.some(beat => !knownBeats.has(beat)) || data.removeRetailerIds.some(id => !knownRetailers.has(id))) {
+      throw Object.assign(new Error('Choose beats and outlets from this delivery plan only.'), { status: 400 });
+    }
+    const keep = original.bills.filter(bill => !data.removeBeats.includes(bill.beat) && !data.removeRetailerIds.includes(bill.retailerId));
+    if (keep.length === original.bills.length) throw Object.assign(new Error('Remove at least one beat or outlet before saving.'), { status: 400 });
+    if (!keep.length) throw Object.assign(new Error('No bills remain. Use Cancel Plan to cancel the whole delivery.'), { status: 400 });
+    const invoices = await tx.invoice.findMany({ where: { deliveryPlanId: old.id }, include: { items: true } });
+    if (invoices.length !== original.bills.length || invoices.some(invoice => !original.bills.some(bill => bill.id === invoice.id))) {
+      throw Object.assign(new Error('Delivery bill assignments changed. Refresh and try again.'), { status: 409 });
+    }
+    const keepIds = new Set(keep.map(bill => bill.id));
+    const revised = reviseDeliverySnapshot(original, invoices.filter(invoice => keepIds.has(invoice.id)));
+    const created = await tx.deliveryPlan.create({ data: {
+      vehicleId: old.vehicleId, scheduledDate: old.scheduledDate, notes: old.notes,
+      snapshot: { ...revised, previousPlanId: old.id }
+    } });
+    await tx.deliveryPlan.update({ where: { id: old.id }, data: {
+      snapshot: { ...original, nextPlanId: created.id, revision: { removeBeats: data.removeBeats, removeRetailerIds: data.removeRetailerIds } }
+    } });
+    await tx.invoice.updateMany({ where: { deliveryPlanId: old.id }, data: { deliveryPlanId: null } });
+    const assigned = await tx.invoice.updateMany({ where: { id: { in: [...keepIds] }, deliveryPlanId: null }, data: { deliveryPlanId: created.id } });
+    if (assigned.count !== keep.length) throw Object.assign(new Error('Bill assignments changed. Please retry.'), { status: 409 });
+    return created;
+  });
+  res.status(201).json(replacement);
 }
