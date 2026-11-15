@@ -3,8 +3,8 @@ export function deliverySnapshot(invoices, vehicle) {
   const bills = invoices.map(invoice => {
     for (const item of invoice.items) {
       const p = item.product;
-      const quantity = Number(item.quantity);
-      const unit = p.unit || 'PCS';
+      const quantity = Number(item.quantity)+Number(item.freeQuantity||0);
+      const unit = item.unitSnapshot || p.unit || 'PCS';
       const pcs = unit === 'PCS' ? quantity : ['BOX','CASE','CARTON'].includes(unit) && p.unitsPerCarton ? quantity * p.unitsPerCarton : null;
       const weight = unit === 'KG' ? quantity : pcs != null && p.pieceWeightGrams ? pcs * Number(p.pieceWeightGrams) / 1000 : null;
       const key = `${item.productId}|${unit}`;

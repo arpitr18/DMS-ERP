@@ -10,7 +10,7 @@ export async function getProfitReport(req, res) {
   const expenses = await prisma.expense.aggregate({ where: { expenseDate: { gte: start, lte: end } }, _sum: { amount: true } });
   const sales = money(invoices.reduce((s, i) => s + Number(i.grandTotal), 0));
   const taxableSales = money(invoices.reduce((s, i) => s + Number(i.taxableAmount), 0));
-  const cogs = money(invoices.flatMap(i => i.items).reduce((s, item) => s + Number(item.quantity) * Number(item.costRate), 0));
+  const cogs = money(invoices.flatMap(i => i.items).reduce((s, item) => s + (Number(item.quantity)+Number(item.freeQuantity||0)) * Number(item.costRate), 0));
   const grossProfit = money(taxableSales - cogs);
   const operatingExpenses = scoped ? null : money(expenses._sum.amount || 0);
   const netProfit = scoped ? null : money(grossProfit - operatingExpenses);

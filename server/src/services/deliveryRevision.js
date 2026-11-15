@@ -4,7 +4,7 @@ export function reviseDeliverySnapshot(snapshot, invoices) {
   const products = snapshot.products.flatMap(original => {
     const items = invoices.flatMap(invoice => invoice.items).filter(item => item.productCodeSnapshot === original.code);
     if (!items.length) return [];
-    const quantity = items.reduce((sum, item) => sum + Number(item.quantity), 0);
+    const quantity = items.reduce((sum, item) => sum + Number(item.quantity)+Number(item.freeQuantity||0), 0);
     const ratio = quantity / original.quantity;
     return [{ ...original, quantity,
       pieces: original.pieces == null ? null : Number((original.pieces * ratio).toFixed(3)),

@@ -17,6 +17,7 @@ import Reports from "./pages/Reports";
 import Profile from "./pages/Profile";
 import BeatMaster from './pages/BeatMaster';
 import Salesmen from './pages/Salesmen';
+import Schemes from './pages/Schemes';
 import Vehicles from './pages/Vehicles';
 import CreateDelivery from './pages/CreateDelivery';
 import DeliveryHistory from './pages/DeliveryHistory';
@@ -39,6 +40,7 @@ export default function App() {
         <Route path="products" element={<Products />} />
         <Route path="beats" element={<BeatMaster />} />
         <Route path="salesmen" element={<Salesmen />} />
+        <Route path="schemes" element={<Schemes />} />
         <Route path="delivery/create" element={<CreateDelivery />} />
         <Route path="delivery/vehicles" element={<Vehicles />} />
         <Route path="delivery/history" element={<DeliveryHistory />} />

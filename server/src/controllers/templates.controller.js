@@ -2,8 +2,8 @@ import ExcelJS from 'exceljs';
 import { prisma } from '../db.js';
 
 export const templateColumns = {
-  products: ['code', 'name', 'category', 'basePrice', 'defaultSellingRate', 'mrp', 'gstRate', 'hsnCode', 'unit', 'unitsPerCarton', 'pieceWeightGrams', 'caseWeightKg', 'purchaseGstRate', 'minStock', 'openingQty'],
-  retailers: ['code', 'name', 'ownerName', 'beat', 'gstin', 'phone', 'building', 'street', 'landmark', 'pincode', 'address', 'state', 'city', 'openingOutstanding', 'creditLimit'],
+  products: ['code', 'name', 'brand', 'category', 'basePrice', 'defaultSellingRate', 'mrp', 'gstRate', 'hsnCode', 'unit', 'unitsPerCarton', 'pieceWeightGrams', 'caseWeightKg', 'purchaseGstRate', 'minStock', 'openingQty'],
+  retailers: ['code', 'name', 'ownerName', 'beat', 'channel', 'subchannel', 'gstin', 'phone', 'building', 'street', 'landmark', 'pincode', 'address', 'state', 'city', 'openingOutstanding', 'creditLimit'],
   pricing: ['retailerCode', 'productCode', 'sellingRate']
 };
 

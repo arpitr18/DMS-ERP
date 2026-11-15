@@ -36,6 +36,7 @@ model BusinessSetting {
 }
 
 model Product {
+  brand String @default("Haldiram")
   id                 String   @id @default(uuid())
   code               String   @unique
   name               String
@@ -59,6 +60,7 @@ model Product {
   purchaseItems        PurchaseItem[]
   invoiceItems         InvoiceItem[]
   inventoryTransactions InventoryTransaction[]
+  schemes ProductScheme[]
 }
 
 model Beat {
@@ -112,6 +114,8 @@ model SalesmanVisit {
 }
 
 model Retailer {
+  channel String?
+  subchannel String?
   ownerName String?
   building String?
   street String?
@@ -142,6 +146,19 @@ model Retailer {
   prices   RetailerProductPrice[]
   invoices Invoice[]
   payments Payment[]
+  credits RetailerCredit[]
+}
+
+model RetailerCredit {
+  id String @id @default(uuid())
+  retailerId String
+  retailer Retailer @relation(fields: [retailerId], references: [id])
+  amount Decimal @db.Decimal(14,2)
+  reason String
+  notes String
+  creditDate DateTime
+  createdAt DateTime @default(now())
+  @@index([retailerId])
 }
 
 model RetailerProductPrice {
@@ -193,6 +210,13 @@ model PurchaseItem {
 }
 
 model Invoice {
+  creditApplied Decimal @default(0) @db.Decimal(14,2)
+  salesmanId String?
+  salesmanNameSnapshot String?
+  regularBeatOrder Boolean?
+  bookingRemark String?
+  additionalDiscountPercent Decimal @default(0) @db.Decimal(5,2)
+  schemeDiscount Decimal @default(0) @db.Decimal(14,2)
   deliveryPlanId String?
   deliveryPlan DeliveryPlan? @relation(fields: [deliveryPlanId], references: [id])
   @@index([deliveryPlanId])
@@ -236,6 +260,14 @@ model Invoice {
 }
 
 model InvoiceItem {
+  appliedSchemes Json?
+  unitSnapshot String?
+  freeQuantity Decimal @default(0) @db.Decimal(12,3)
+  schemeTypeSnapshot String?
+  schemeIdSnapshot String?
+  schemeNameSnapshot String?
+  schemePercent Decimal @default(0) @db.Decimal(5,2)
+  schemeDiscount Decimal @default(0) @db.Decimal(14,2)
   id                  String  @id @default(uuid())
   invoiceId           String
   productId           String
@@ -359,6 +391,30 @@ model DeliveryPlan {
   createdAt DateTime @default(now())
   completedAt DateTime?
   invoices Invoice[]
+}
+
+model ProductScheme {
+  code String @unique
+  targetType String @default("PRODUCT")
+  brand String?
+  channel String?
+  subchannel String?
+  retailerId String?
+  beatId String?
+  type String @default("PERCENT")
+  quantityUnit String @default("BILLING_UNIT")
+  slabs Json
+  repeatBenefit Boolean @default(false)
+  id String @id @default(uuid())
+  name String
+  productId String?
+  product Product? @relation(fields: [productId], references: [id])
+  discountPercent Decimal @db.Decimal(5,2)
+  startDate DateTime @db.Date
+  endDate DateTime @db.Date
+  cancelledAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([productId,startDate,endDate])
 }
 
 model ImportLog {

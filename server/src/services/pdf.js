@@ -36,7 +36,8 @@ export function streamInvoicePdf(invoice, res) {
   const bottom=650;
   const closeTable=()=>{columns.forEach(x=>doc.moveTo(x,top+22).lineTo(x,bottom).stroke());doc.moveTo(40,bottom).lineTo(555,bottom).stroke();};
   for(const item of invoice.items) {
-    const description=item.productNameSnapshot+(gst?' (GST '+Number(item.gstRate)+'%)':'');
+    const stacked=item.appliedSchemes?.length?item.appliedSchemes.map(s=>`${s.code} ${s.name}${s.type==='PERCENT'?' '+s.value+'%':''}${s.discount?' (-INR '+amount(s.discount)+')':''}${s.freeQuantity?' +'+s.freeQuantity+' '+(item.unitSnapshot||'units')+' free':''}`).join('\n'):null;
+    const description=stacked?item.productNameSnapshot+(gst?' (GST '+Number(item.gstRate)+'%)':'')+'\n'+stacked:item.productNameSnapshot+(gst?' (GST '+Number(item.gstRate)+'%)':'')+(item.schemeNameSnapshot?'\nScheme: '+item.schemeNameSnapshot+(Number(item.schemePercent||0)>0?' '+Number(item.schemePercent)+'%':'')+(Number(item.schemeDiscount||0)>0?' (-INR '+amount(item.schemeDiscount)+')':'')+(Number(item.freeQuantity||0)>0?' +'+Number(item.freeQuantity)+' '+(item.unitSnapshot||'units')+' free':''):'');
     doc.font('Helvetica').fontSize(9);
     const height=Math.max(24,doc.heightOfString(description,{width:290})+10);
     if(y+height>bottom) {closeTable();text('Continued on next page',40,670,515,9,false,'right');doc.addPage();text(invoice.invoiceNumber+' - continued',40,40,515,11,true);top=70;tableHeader(top);y=top+22;}
@@ -50,9 +51,10 @@ export function streamInvoicePdf(invoice, res) {
   box(40,650,300,26);text('Thank you for your business!',45,659,290,9,false,'center');
   box(340,650,215,26);text('TOTAL',345,659,85,10,true);text(amount(invoice.grandTotal),435,659,115,10,true,'right');
   let ty=686;
-  const totals=[['Taxable value',invoice.taxableAmount],['GST included',Number(invoice.cgst||0)+Number(invoice.sgst||0)+Number(invoice.igst||0)],['Discount',invoice.discount],['Round off',invoice.roundOff],['Received',invoice.amountReceived],['Balance due',invoice.balanceDue]];
+  const totals=[['Taxable value',invoice.taxableAmount],['GST included',Number(invoice.cgst||0)+Number(invoice.sgst||0)+Number(invoice.igst||0)],['Total discount',invoice.discount],...(Number(invoice.schemeDiscount||0)>0?[['Scheme savings included',invoice.schemeDiscount]]:[]),['Round off',invoice.roundOff],['Received',Number(invoice.amountReceived)-Number(invoice.creditApplied||0)],...(Number(invoice.creditApplied)>0?[['Previous credit settled',invoice.creditApplied]]:[]),['Balance due',invoice.balanceDue]];
   totals.forEach(([label,value])=>{text(label,340,ty,125,8);text(amount(value),470,ty,80,8,false,'right');ty+=13;});
   text('Amounts in INR. Unit prices include GST.',40,691,290,8);
-  if(invoice.notes) text(invoice.notes,40,710,275,8);
+  const booking=[invoice.salesmanNameSnapshot?'Booked by: '+invoice.salesmanNameSnapshot:'',invoice.bookingRemark,invoice.notes].filter(Boolean).join('\n');
+  if(booking) text(booking,40,710,275,8);
   doc.end();
 }

@@ -25,6 +25,7 @@ export async function listCollections(req, res) {
 export async function createCollection(req, res) {
   const data = schema.parse(req.body);
   const payment = await prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT "id" FROM "Retailer" WHERE "id"=${data.retailerId} FOR UPDATE`;
     const retailer = await tx.retailer.findUnique({ where: { id: data.retailerId } });
     if (!retailer) throw Object.assign(new Error('Retailer not found.'), { status: 404 });
     if (data.invoiceId) {
@@ -35,11 +36,26 @@ export async function createCollection(req, res) {
     if (data.invoiceId) {
       const paid = await tx.payment.aggregate({ where: { invoiceId: data.invoiceId }, _sum: { amount: true } });
       const invoice = await tx.invoice.findUnique({ where: { id: data.invoiceId } });
-      const received = Number(paid._sum.amount || 0);
+      const received = Number(paid._sum.amount || 0)+Number(invoice.creditApplied||0);
       const due = Math.max(0, Number(invoice.grandTotal) - received);
       await tx.invoice.update({ where: { id: invoice.id }, data: { amountReceived: received, balanceDue: due, status: due <= 0 ? 'PAID' : 'OPEN' } });
     }
     return created;
   });
   res.status(201).json(payment);
+}
+
+export async function listCredits(req,res){
+  res.json(await prisma.retailerCredit.findMany({include:{retailer:{select:{name:true}}},orderBy:{createdAt:'desc'},take:300}));
+}
+
+export async function createCredit(req,res){
+  const data=z.object({retailerId:z.string().uuid(),amount:z.number().positive().multipleOf(0.01),reason:z.enum(['REFUND','DISCOUNT','OTHER']),notes:z.string().trim().min(1).max(500),creditDate:z.string().date()}).parse(req.body);
+  const created=await prisma.$transaction(async tx=>{
+    await tx.$queryRaw`SELECT "id" FROM "Retailer" WHERE "id"=${data.retailerId} FOR UPDATE`;
+    const retailer=await tx.retailer.findUnique({where:{id:data.retailerId}});
+    if(!retailer?.active)throw Object.assign(new Error('Choose an active retailer.'),{status:400});
+    return tx.retailerCredit.create({data:{...data,creditDate:new Date(data.creditDate+'T00:00:00Z')}});
+  });
+  res.status(201).json(created);
 }

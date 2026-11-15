@@ -4,6 +4,7 @@ import { prisma } from '../db.js';
 import { normalizeProductPacking } from '../services/productPacking.js';
 
 const productSchema = z.object({
+  brand:z.string().trim().min(1).optional().default('Haldiram'),
   code: z.string().min(1).transform(v => v.trim().toUpperCase()), name: z.string().min(1).transform(v => v.trim()),
   category: z.string().optional().nullable(), basePrice: z.coerce.number().nonnegative(), defaultSellingRate: z.coerce.number().nonnegative(),
   mrp: z.coerce.number().nonnegative(), gstRate: z.coerce.number().min(0).max(100), hsnCode: z.string().optional().nullable(),
@@ -63,6 +64,7 @@ export async function importProducts(req, res) {
     const raw = {
       code: value(row, ['code', 'productcode', 'product code']), name: value(row, ['name', 'productname', 'product name']),
       category: value(row, ['category']), basePrice: value(row, ['baseprice', 'base price', 'purchaseprice', 'purchase price']),
+      brand:value(row,['brand'])||'Haldiram',
       defaultSellingRate: value(row, ['defaultsellingrate', 'default selling rate', 'sellingrate', 'selling rate']), mrp: value(row, ['mrp']),
       gstRate: value(row, ['gstrate', 'gst rate', 'gst']), hsnCode: value(row, ['hsncode', 'hsn code', 'hsn']), unit: value(row, ['unit']) || 'PCS',
       unitsPerCarton: value(row, ['unitspercarton', 'units per carton']), minStock: value(row, ['minstock', 'min stock']) || 0,

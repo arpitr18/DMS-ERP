@@ -5,8 +5,10 @@ import { retailerOutstanding } from '../services/outstanding.js';
 import { validateRetailerBeat } from '../services/retailerBeat.js';
 import { resolveLocation } from '../services/location.js';
 import { retailerAddress, retailerCode } from '../services/retailerAddress.js';
+import {retailChannels,retailSubchannels} from '../../../shared/retailAttributes.js';
 
 const schema = z.object({
+  channel:z.enum(retailChannels).nullable().optional(),subchannel:z.enum(retailSubchannels).nullable().optional(),
   ownerName: z.string().trim().optional().nullable(), building: z.string().trim().optional().nullable(), street: z.string().trim().optional().nullable(), landmark: z.string().trim().optional().nullable(),
   pincode: z.union([z.string().regex(/^[1-9]\d{5}$/), z.literal('')]).optional().nullable(),
   latitude: z.number().min(-90).max(90).optional().nullable(), longitude: z.number().min(-180).max(180).optional().nullable(),
@@ -23,6 +25,7 @@ export async function listRetailers(req, res) {
   const retailers = await prisma.retailer.findMany({
     where: q ? { OR: [{ code: { contains: q, mode: 'insensitive' } }, { name: { contains: q, mode: 'insensitive' } }, { market: { contains: q, mode: 'insensitive' } }, { gstin: { contains: q, mode: 'insensitive' } }] } : {},
     orderBy: [{ active: 'desc' }, { name: 'asc' }]
+    ,include:{beat:{select:{id:true}}}
   });
   res.json(await Promise.all(retailers.map(async r => ({ ...r, outstanding: await retailerOutstanding(prisma, r.id) }))));
 }
@@ -55,15 +58,17 @@ export async function updateRetailer(req, res) {
 export async function getRetailerLedger(req, res) {
   const retailer = await prisma.retailer.findUnique({ where: { id: req.params.id } });
   if (!retailer) return res.status(404).json({ message: 'Retailer not found.' });
-  const [invoices, payments] = await Promise.all([
+  const [invoices, payments, credits] = await Promise.all([
     prisma.invoice.findMany({ where: { retailerId: retailer.id }, select: { id: true, invoiceNumber: true, invoiceDate: true, grandTotal: true }, orderBy: { invoiceDate: 'asc' } }),
-    prisma.payment.findMany({ where: { retailerId: retailer.id }, select: { id: true, paymentDate: true, amount: true, method: true, reference: true }, orderBy: { paymentDate: 'asc' } })
+    prisma.payment.findMany({ where: { retailerId: retailer.id }, select: { id: true, paymentDate: true, amount: true, method: true, reference: true }, orderBy: { paymentDate: 'asc' } }),
+    prisma.retailerCredit.findMany({where:{retailerId:retailer.id},orderBy:{creditDate:'asc'}})
   ]);
   let balance = Number(retailer.openingOutstanding);
   const entries = [{ date: retailer.createdAt, type: 'OPENING', reference: 'Opening Outstanding', debit: Number(retailer.openingOutstanding), credit: 0, balance }];
   const merged = [
     ...invoices.map(i => ({ date: i.invoiceDate, type: 'INVOICE', reference: i.invoiceNumber, debit: Number(i.grandTotal), credit: 0 })),
-    ...payments.map(p => ({ date: p.paymentDate, type: 'PAYMENT', reference: p.reference || p.method, debit: 0, credit: Number(p.amount) }))
+    ...payments.map(p => ({ date: p.paymentDate, type: 'PAYMENT', reference: p.reference || p.method, debit: 0, credit: Number(p.amount) })),
+    ...credits.map(c=>({date:c.creditDate,type:'CREDIT',reference:c.reason+': '+c.notes,debit:0,credit:Number(c.amount)}))
   ].sort((a, b) => new Date(a.date) - new Date(b.date));
   for (const entry of merged) { balance += entry.debit - entry.credit; entries.push({ ...entry, balance }); }
   res.json({ retailer, entries, outstanding: balance });
@@ -86,6 +91,7 @@ export async function importRetailers(req, res) {
       market: get(row, 'beat', 'market', 'area'), gstin: get(row, 'gstin', 'gst'), phone: get(row, 'phone', 'mobile'), address: get(row, 'address'),
       state: get(row, 'state'), city: get(row, 'city'), openingOutstanding: get(row, 'openingoutstanding', 'opening outstanding') || 0,
       ownerName: get(row, 'ownername', 'owner name'), building: get(row, 'building'), street: get(row, 'street'), landmark: get(row, 'landmark'), pincode: get(row, 'pincode') == null ? undefined : String(get(row, 'pincode')),
+      channel:get(row,'channel'),subchannel:get(row,'subchannel'),
       creditLimit: get(row, 'creditlimit', 'credit limit') || undefined
     };
     if (typeof raw.phone === 'number') raw.phone = String(raw.phone);

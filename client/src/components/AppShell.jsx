@@ -25,7 +25,7 @@ import { clearSession, getUser } from "../lib/api";
 
 const dashboard = ["Dashboard", "/", LayoutDashboard];
 const billing = [["Create Bills", "/billing", ReceiptText], ["Billing History", "/bills", History]];
-const master = [["Product", "/products", Package], ["Retailer", "/retailers", Store], ["Selling Master", "/selling-master", BadgeIndianRupee], ["Beat Master", "/beats", Store], ["Salesmen", "/salesmen", UserRound]];
+const master = [["Product", "/products", Package], ["Retailer", "/retailers", Store], ["Selling Master", "/selling-master", BadgeIndianRupee], ["Beat Master", "/beats", Store], ["Salesmen", "/salesmen", UserRound], ["Scheme Master", "/schemes", BadgeIndianRupee]];
 const data = [["Profits", "/profits", ChartNoAxesCombined], ["Reports", "/reports", FileBarChart]];
 const delivery = [["Create Plan", "/delivery/create", ReceiptText], ["Vehicle Details", "/delivery/vehicles", Truck], ["Delivery History", "/delivery/history", History]];
 const standalone = [["Purchases", "/purchases", ShoppingCart], ["Inventory", "/inventory", Boxes], ["Collections", "/collections", WalletCards], ["Expenses", "/expenses", CircleDollarSign]];

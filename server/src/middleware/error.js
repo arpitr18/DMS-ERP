@@ -16,5 +16,5 @@ export function errorHandler(err, req, res, next) {
   if (err?.code === 'P2002') {
     return res.status(409).json({ message: 'A record with the same unique value already exists.' });
   }
-  res.status(err.status || 500).json({ message: err.message || 'Something went wrong.' });
+  res.status(err.status || 500).json({ message: err.message || 'Something went wrong.',...(err.projectedOutstanding!==undefined?{code:'CREDIT_LIMIT_EXCEEDED',creditLimit:err.creditLimit,projectedOutstanding:err.projectedOutstanding}:{}) });
 }
