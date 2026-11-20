@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { prisma } from '../db.js';
 import { retailerOutstanding } from '../services/outstanding.js';
+import {creditSettlementHistory,creditSources} from '../services/creditSettlements.js';
+import {settleGeneralPayments,excessPayment} from '../services/paymentAllocations.js';
 
 const schema = z.object({
   retailerId: z.string().uuid(), invoiceId: z.string().uuid().optional().nullable(), amount: z.coerce.number().positive(),
@@ -40,13 +42,16 @@ export async function createCollection(req, res) {
       const due = Math.max(0, Number(invoice.grandTotal) - received);
       await tx.invoice.update({ where: { id: invoice.id }, data: { amountReceived: received, balanceDue: due, status: due <= 0 ? 'PAID' : 'OPEN' } });
     }
+    await settleGeneralPayments(tx,retailer.id);
     return created;
   });
   res.status(201).json(payment);
 }
 
 export async function listCredits(req,res){
-  res.json(await prisma.retailerCredit.findMany({include:{retailer:{select:{name:true}}},orderBy:{createdAt:'desc'},take:300}));
+  const credits=await creditSources(prisma);
+  const invoices=await prisma.invoice.findMany({where:{creditApplied:{gt:0}},select:{id:true,retailerId:true,invoiceNumber:true,creditApplied:true,creditAllocations:true,createdAt:true}});
+  res.json([...new Set(credits.map(c=>c.retailerId))].flatMap(id=>creditSettlementHistory(credits.filter(c=>c.retailerId===id),invoices.filter(i=>i.retailerId===id))).sort((a,b)=>+new Date(b.createdAt)-+new Date(a.createdAt)).slice(0,300));
 }
 
 export async function createCredit(req,res){

@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import returnsRoutes from './routes/returns.js';
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
@@ -81,6 +82,7 @@ app.use("/api/retailers", requireAuth, distributorOnly, retailersRoutes);
 app.use("/api/pricing", requireAuth, distributorOnly, pricingRoutes);
 app.use("/api/purchases", requireAuth, distributorOnly, purchasesRoutes);
 app.use("/api/invoices", requireAuth, distributorOnly, billingRoutes);
+app.use('/api/returns',requireAuth,distributorOnly,returnsRoutes);
 app.use("/api/inventory", requireAuth, distributorOnly, inventoryRoutes);
 app.use("/api/collections", requireAuth, distributorOnly, collectionsRoutes);
 app.use("/api/expenses", requireAuth, distributorOnly, expensesRoutes);

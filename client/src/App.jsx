@@ -4,6 +4,7 @@ import { getToken } from "./lib/api";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Billing from "./pages/Billing";
+import Returns from './pages/Returns';
 import Bills from "./pages/Bills";
 import Products from "./pages/Products";
 import Retailers from "./pages/Retailers";
@@ -36,6 +37,7 @@ export default function App() {
       <Route element={<Protected />}>
         <Route index element={<Dashboard />} />
         <Route path="billing" element={<Billing />} />
+        <Route path="returns" element={<Returns />} />
         <Route path="bills" element={<Bills />} />
         <Route path="products" element={<Products />} />
         <Route path="beats" element={<BeatMaster />} />

@@ -210,6 +210,8 @@ model PurchaseItem {
 }
 
 model Invoice {
+  generalPaymentApplied Decimal @default(0) @db.Decimal(14,2)
+  creditAllocations Json?
   creditApplied Decimal @default(0) @db.Decimal(14,2)
   salesmanId String?
   salesmanNameSnapshot String?
@@ -290,7 +292,24 @@ model InvoiceItem {
   @@index([productId])
 }
 
+model ReturnRecord {
+  id String @id @default(uuid())
+  retailerId String
+  retailerName String
+  invoiceId String?
+  invoiceNumber String?
+  type String
+  returnDate DateTime
+  reason String
+  amount Decimal @db.Decimal(14,2)
+  items Json
+  createdAt DateTime @default(now())
+  @@index([invoiceId])
+  @@index([retailerId])
+}
+
 model Payment {
+  allocations Json?
   id          String   @id @default(uuid())
   retailerId  String
   invoiceId   String?

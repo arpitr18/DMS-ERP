@@ -9,6 +9,7 @@ import { calculateInclusiveTotals } from '../services/inclusiveTax.js';
 import { validDateKey } from '../../../shared/schemeDates.js';
 import {applyStackedSchemes} from '../../../shared/stackedSchemes.js';
 import {retailerAccount} from '../services/retailerCredit.js';
+import {allocateCreditNotes} from '../services/creditSettlements.js';
 
 const itemSchema = z.object({ productId: z.string().uuid(), quantity: z.coerce.number().positive(), manualRate: z.coerce.number().positive().optional().nullable() });
 const invoiceSchema = z.object({
@@ -33,13 +34,15 @@ export async function listInvoices(req, res) {
   ];
   if (req.query.market) where.retailer = { market: String(req.query.market) };
   const page = z.coerce.number().int().min(1).parse(req.query.page || 1);
+  const pageSize=z.coerce.number().int().min(1).max(300).parse(req.query.pageSize||300);
   if (req.query.retailerId) where.retailerId = String(req.query.retailerId);
   if (req.query.from || req.query.to) {
     where.invoiceDate = {};
     if (req.query.from) where.invoiceDate.gte = new Date(`${req.query.from}T00:00:00`);
     if (req.query.to) where.invoiceDate.lte = new Date(`${req.query.to}T23:59:59.999`);
   }
-  const rows = await prisma.invoice.findMany({ where, include: { retailer: { select: { name: true, market: true } }, deliveryPlan: { select: { id: true, status: true, scheduledDate: true } } }, orderBy: [{ invoiceDate: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }], take: 300, skip: (page - 1) * 300 });
+  const rows = await prisma.invoice.findMany({ where, include: { retailer: { select: { name: true, market: true } }, deliveryPlan: { select: { id: true, status: true, scheduledDate: true } } }, orderBy: [{ invoiceDate: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }], take: pageSize, skip: (page - 1) * pageSize });
+  if(req.query.pageSize)return res.json({rows,total:await prisma.invoice.count({where}),page,pageSize});
   res.json(rows);
 }
 
@@ -138,6 +141,7 @@ export async function createInvoice(req, res) {
     const balanceDue = money(grandTotal - amountReceived);
     const created = await tx.invoice.create({
       data: {
+        creditAllocations:creditApplied>0?await allocateCreditNotes(tx,retailer.id,creditApplied):[],
         creditApplied,salesmanId:salesman?.id||null,salesmanNameSnapshot:salesman?.name||null,regularBeatOrder,bookingRemark,additionalDiscountPercent:data.additionalDiscountPercent||0,
         billType: data.billType, invoiceNumber: generateInvoiceNumber(business.invoicePrefix), retailerId: retailer.id, invoiceDate: new Date(data.invoiceDate),
         paymentMode: data.paymentMode, status: balanceDue <= 0 ? 'PAID' : 'OPEN', retailerNameSnapshot: retailer.name,
